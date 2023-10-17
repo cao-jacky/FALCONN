@@ -41,10 +41,15 @@
 #include <utility>
 #include <vector>
 
+// scripts/fuse_gtest.py depends on gtest's own header being #included
+// *unconditionally*.  Therefore these #includes cannot be moved
+// inside #if GTEST_HAS_PARAM_TEST.
 #include "gtest/internal/gtest-internal.h"
 #include "gtest/internal/gtest-linked_ptr.h"
 #include "gtest/internal/gtest-port.h"
 #include "gtest/gtest-printers.h"
+
+#if GTEST_HAS_PARAM_TEST
 
 namespace testing {
 
@@ -719,5 +724,7 @@ class ParameterizedTestCaseRegistry {
 
 }  // namespace internal
 }  // namespace testing
+
+#endif  //  GTEST_HAS_PARAM_TEST
 
 #endif  // GTEST_INCLUDE_GTEST_INTERNAL_GTEST_PARAM_UTIL_H_

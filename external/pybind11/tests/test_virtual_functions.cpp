@@ -207,9 +207,7 @@ TEST_SUBMODULE(virtual_functions, m) {
 
         void f() override {
             py::print("PyA.f()");
-            // This convolution just gives a `void`, but tests that PYBIND11_TYPE() works to protect
-            // a type containing a ,
-            PYBIND11_OVERLOAD(PYBIND11_TYPE(typename std::enable_if<true, void>::type), A, f);
+            PYBIND11_OVERLOAD(void, A, f);
         }
     };
 
@@ -251,7 +249,7 @@ TEST_SUBMODULE(virtual_functions, m) {
     m.def("dispatch_issue_go", [](const Base * b) { return b->dispatch(); });
 
     // test_override_ref
-    // #392/397: overriding reference-returning functions
+    // #392/397: overridding reference-returning functions
     class OverrideTest {
     public:
         struct A { std::string value = "hi"; };

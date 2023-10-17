@@ -31,7 +31,6 @@
 
 """Tests the text output of Google C++ Testing Framework.
 
-
 SYNOPSIS
        gtest_output_test.py --build_dir=BUILD/DIR --gengolden
          # where BUILD/DIR contains the built gtest_output_test_ file.
@@ -52,7 +51,6 @@ import gtest_test_utils
 GENGOLDEN_FLAG = '--gengolden'
 CATCH_EXCEPTIONS_ENV_VAR_NAME = 'GTEST_CATCH_EXCEPTIONS'
 
-IS_LINUX = os.name == 'posix' and os.uname()[0] == 'Linux'
 IS_WINDOWS = os.name == 'nt'
 
 # TODO(vladl@google.com): remove the _lin suffix.
@@ -101,8 +99,7 @@ def RemoveLocations(test_output):
        'FILE_NAME:#: '.
   """
 
-  return re.sub(r'.*[/\\]((gtest_output_test_|gtest).cc)(\:\d+|\(\d+\))\: ',
-                r'\1:#: ', test_output)
+  return re.sub(r'.*[/\\](.+)(\:\d+|\(\d+\))\: ', r'\1:#: ', test_output)
 
 
 def RemoveStackTraceDetails(output):
@@ -252,12 +249,11 @@ test_list = GetShellCommandOutput(COMMAND_LIST_TESTS)
 SUPPORTS_DEATH_TESTS = 'DeathTest' in test_list
 SUPPORTS_TYPED_TESTS = 'TypedTest' in test_list
 SUPPORTS_THREADS = 'ExpectFailureWithThreadsTest' in test_list
-SUPPORTS_STACK_TRACES = IS_LINUX
+SUPPORTS_STACK_TRACES = False
 
 CAN_GENERATE_GOLDEN_FILE = (SUPPORTS_DEATH_TESTS and
                             SUPPORTS_TYPED_TESTS and
                             SUPPORTS_THREADS and
-                            SUPPORTS_STACK_TRACES and
                             not IS_WINDOWS)
 
 class GTestOutputTest(gtest_test_utils.TestCase):
@@ -283,7 +279,7 @@ class GTestOutputTest(gtest_test_utils.TestCase):
   def testOutput(self):
     output = GetOutputOfAllCommands()
 
-    golden_file = open(GOLDEN_PATH, 'rb')
+    golden_file = open(GOLDEN_PATH, 'r')
     # A mis-configured source control system can cause \r appear in EOL
     # sequences when we read the golden file irrespective of an operating
     # system used. Therefore, we need to strip those \r's from newlines
@@ -334,9 +330,9 @@ if __name__ == '__main__':
     else:
       message = (
           """Unable to write a golden file when compiled in an environment
-that does not support all the required features (death tests,
-typed tests, stack traces, and multiple threads).
-Please build this test and generate the golden file using Blaze on Linux.""")
+that does not support all the required features (death tests, typed tests,
+and multiple threads).  Please generate the golden file using a binary built
+with those features enabled.""")
 
       sys.stderr.write(message)
       sys.exit(1)

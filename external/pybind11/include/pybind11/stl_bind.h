@@ -587,7 +587,7 @@ class_<Map, holder_type> bind_map(handle scope, const std::string &name, Args&&.
                auto it = m.find(k);
                if (it == m.end())
                    throw key_error();
-               m.erase(it);
+               return m.erase(it);
            }
     );
 

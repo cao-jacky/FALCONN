@@ -79,6 +79,6 @@ class ComposedTransformation {
 };
 
 }  // namespace core
-}  // namespace falconn
+}  // namespace falcon
 
 #endif

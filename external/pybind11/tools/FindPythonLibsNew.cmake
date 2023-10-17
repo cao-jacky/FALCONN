@@ -1,5 +1,5 @@
 # - Find python libraries
-# This module finds the libraries corresponding to the Python interpreter
+# This module finds the libraries corresponding to the Python interpeter
 # FindPythonInterp provides.
 # This code sets the following variables:
 #

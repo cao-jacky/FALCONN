@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "../falconn_global.h"
+#include "../sketches.h"
 #include "data_storage.h"
 
 namespace falconn {
@@ -72,8 +73,7 @@ class StaticLSHTable
                       StaticLSHTable<PointType, KeyType, LSH, HashType,
                                      HashTable, DataStorageType>>(lsh,
                                                                   hash_table),
-        n_(points.size()),
-        points_(points) {
+        n_(points.size()) {
     if (num_setup_threads < 0) {
       throw LSHTableError("Number of setup threads cannot be negative.");
     }
@@ -106,15 +106,6 @@ class StaticLSHTable
     }
   }
 
-  void add_table() {
-    typename LSH::template BatchHash<DataStorageType> bh(*(this->lsh_));
-    std::vector<HashType> table_hashes;
-    bh.batch_hash_single_table(points_, (this->lsh_)->get_l() - 1,
-                               &table_hashes);
-    this->hash_table_->add_entries_for_table(table_hashes,
-                                             (this->lsh_)->get_l() - 1);
-  }
-
   // TODO: add query statistics back in
   class Query {
    public:
@@ -123,10 +114,10 @@ class StaticLSHTable
           is_candidate_(parent.n_),
           lsh_query_(*(parent.lsh_)) {}
 
-    void get_candidates_with_duplicates(const PointType& p,
-                                        int_fast64_t num_probes,
-                                        int_fast64_t max_num_candidates,
-                                        std::vector<KeyType>* result) {
+    void get_candidates_with_duplicates(
+        const PointType& p, int_fast64_t num_probes,
+        int_fast64_t max_num_candidates, std::vector<KeyType>* result,
+        SketchesQueryable<PointType, KeyType>* sketches = nullptr) {
       if (result == nullptr) {
         throw LSHTableError("Results vector pointer is nullptr.");
       }
@@ -146,14 +137,22 @@ class StaticLSHTable
           parent_.hash_table_->retrieve_bulk(tmp_probes_by_table_);
 
       int_fast64_t num_candidates = 0;
-      result->clear();
+      if (sketches == nullptr) {
+        result->clear();
+      } else {
+        unfiltered_candidates_.clear();
+      }
       if (max_num_candidates < 0) {
         max_num_candidates = std::numeric_limits<int_fast64_t>::max();
       }
       while (num_candidates < max_num_candidates &&
              hash_table_iterators_.first != hash_table_iterators_.second) {
         num_candidates += 1;
-        result->push_back(*(hash_table_iterators_.first));
+        if (sketches == nullptr) {
+          result->push_back(*(hash_table_iterators_.first));
+        } else {
+          unfiltered_candidates_.push_back(*(hash_table_iterators_.first));
+        }
         ++hash_table_iterators_.first;
       }
 
@@ -163,6 +162,10 @@ class StaticLSHTable
               hashing_end_time - lsh_end_time);
       stats_.average_hash_table_time += elapsed_hashing.count();
 
+      if (sketches != nullptr) {
+        sketches->filter_close(p, unfiltered_candidates_, result);
+      }
+
       auto sketches_end_time = std::chrono::high_resolution_clock::now();
       auto elapsed_sketches =
           std::chrono::duration_cast<std::chrono::duration<double>>(
@@ -171,6 +174,10 @@ class StaticLSHTable
 
       stats_.average_num_candidates += num_candidates;
 
+      if (sketches != nullptr) {
+        stats_.average_num_filtered_candidates += result->size();
+      }
+
       auto end_time = std::chrono::high_resolution_clock::now();
       auto elapsed_total =
           std::chrono::duration_cast<std::chrono::duration<double>>(end_time -
@@ -178,9 +185,10 @@ class StaticLSHTable
       stats_.average_total_query_time += elapsed_total.count();
     }
 
-    void get_unique_candidates(const PointType& p, int_fast64_t num_probes,
-                               int_fast64_t max_num_candidates,
-                               std::vector<KeyType>* result) {
+    void get_unique_candidates(
+        const PointType& p, int_fast64_t num_probes,
+        int_fast64_t max_num_candidates, std::vector<KeyType>* result,
+        SketchesQueryable<PointType, KeyType>* sketches = nullptr) {
       if (result == nullptr) {
         throw LSHTableError("Results vector pointer is nullptr.");
       }
@@ -188,7 +196,8 @@ class StaticLSHTable
       auto start_time = std::chrono::high_resolution_clock::now();
       stats_.num_queries += 1;
 
-      get_unique_candidates_internal(p, num_probes, max_num_candidates, result);
+      get_unique_candidates_internal(p, num_probes, max_num_candidates, result,
+                                     sketches);
 
       auto end_time = std::chrono::high_resolution_clock::now();
       auto elapsed_total =
@@ -216,13 +225,14 @@ class StaticLSHTable
     std::vector<std::vector<HashType>> tmp_probes_by_table_;
     std::pair<typename HashTable::Iterator, typename HashTable::Iterator>
         hash_table_iterators_;
+    std::vector<KeyType> unfiltered_candidates_;
 
     QueryStatistics stats_;
 
-    void get_unique_candidates_internal(const PointType& p,
-                                        int_fast64_t num_probes,
-                                        int_fast64_t max_num_candidates,
-                                        std::vector<KeyType>* result) {
+    void get_unique_candidates_internal(
+        const PointType& p, int_fast64_t num_probes,
+        int_fast64_t max_num_candidates, std::vector<KeyType>* result,
+        SketchesQueryable<PointType, KeyType>* sketches = nullptr) {
       auto start_time = std::chrono::high_resolution_clock::now();
 
       lsh_query_.get_probes_by_table(p, &tmp_probes_by_table_, num_probes);
@@ -238,7 +248,11 @@ class StaticLSHTable
       query_counter_ += 1;
 
       int_fast64_t num_candidates = 0;
-      result->clear();
+      if (sketches == nullptr) {
+        result->clear();
+      } else {
+        unfiltered_candidates_.clear();
+      }
       if (max_num_candidates < 0) {
         max_num_candidates = std::numeric_limits<int_fast64_t>::max();
       }
@@ -248,7 +262,11 @@ class StaticLSHTable
         int_fast64_t cur = *(hash_table_iterators_.first);
         if (is_candidate_[cur] != query_counter_) {
           is_candidate_[cur] = query_counter_;
-          result->push_back(cur);
+          if (sketches == nullptr) {
+            result->push_back(cur);
+          } else {
+            unfiltered_candidates_.push_back(cur);
+          }
         }
 
         ++hash_table_iterators_.first;
@@ -260,6 +278,10 @@ class StaticLSHTable
               hashing_end_time - lsh_end_time);
       stats_.average_hash_table_time += elapsed_hashing.count();
 
+      if (sketches != nullptr) {
+        sketches->filter_close(p, unfiltered_candidates_, result);
+      }
+
       auto sketches_end_time = std::chrono::high_resolution_clock::now();
       auto elapsed_sketches =
           std::chrono::duration_cast<std::chrono::duration<double>>(
@@ -267,13 +289,17 @@ class StaticLSHTable
       stats_.average_sketches_time += elapsed_sketches.count();
 
       stats_.average_num_candidates += num_candidates;
-      stats_.average_num_unique_candidates += result->size();
+      if (sketches == nullptr) {
+        stats_.average_num_unique_candidates += result->size();
+      } else {
+        stats_.average_num_unique_candidates += unfiltered_candidates_.size();
+        stats_.average_num_filtered_candidates += result->size();
+      }
     }
   };
 
  private:
   int_fast64_t n_;
-  const DataStorageType& points_;
 
   void setup_table_range(int_fast32_t from, int_fast32_t to,
                          const DataStorageType& points) {

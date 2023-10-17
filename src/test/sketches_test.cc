@@ -22,16 +22,17 @@ using falconn::DenseVector;
 using falconn::core::ArrayDataStorage;
 using falconn::core::PlainArrayDataStorage;
 using falconn::core::RandomProjectionSketches;
+using falconn::core::RandomProjectionSketchesQuery;
 using falconn::core::SketchesError;
 
 TEST(SketchesTest, EmptyDataset) {
-  const uint_fast64_t seed = 4057218;
+  mt19937_64 rng(4057218);
   try {
     vector<DenseVector<float>> dataset;
     ArrayDataStorage<DenseVector<float>> ads(dataset);
     RandomProjectionSketches<DenseVector<float>,
                              ArrayDataStorage<DenseVector<float>>>
-        rps(1, ads, 2, seed);
+        rps(ads, 2, rng);
     FAIL();
   } catch (SketchesError &e) {
   } catch (...) {
@@ -43,7 +44,7 @@ TEST(SketchesTest, EmptyDataset) {
     ArrayDataStorage<DenseVector<float>> ads(dataset);
     RandomProjectionSketches<DenseVector<float>,
                              ArrayDataStorage<DenseVector<float>>>
-        rps(1, ads, 2, seed);
+        rps(ads, 2, rng);
   } catch (SketchesError &e) {
     FAIL();
   } catch (...) {
@@ -54,7 +55,7 @@ TEST(SketchesTest, EmptyDataset) {
     ArrayDataStorage<DenseVector<double>> ads(dataset);
     RandomProjectionSketches<DenseVector<double>,
                              ArrayDataStorage<DenseVector<double>>>
-        rps(1, ads, 2, seed);
+        rps(ads, 2, rng);
     FAIL();
   } catch (SketchesError &e) {
   } catch (...) {
@@ -66,7 +67,7 @@ TEST(SketchesTest, EmptyDataset) {
     ArrayDataStorage<DenseVector<double>> ads(dataset);
     RandomProjectionSketches<DenseVector<double>,
                              ArrayDataStorage<DenseVector<double>>>
-        rps(1, ads, 2, seed);
+        rps(ads, 2, rng);
   } catch (SketchesError &e) {
     FAIL();
   } catch (...) {
@@ -75,9 +76,9 @@ TEST(SketchesTest, EmptyDataset) {
   try {
     vector<float> dataset(100);
     PlainArrayDataStorage<DenseVector<float>> pads(&dataset[0], 0, 100);
-    RandomProjectionSketches<DenseVector<float>, int32_t,
+    RandomProjectionSketches<DenseVector<float>,
                              PlainArrayDataStorage<DenseVector<float>>>
-        rps(1, pads, 2, seed);
+        rps(pads, 2, rng);
     FAIL();
   } catch (SketchesError &e) {
   } catch (...) {
@@ -86,9 +87,9 @@ TEST(SketchesTest, EmptyDataset) {
   try {
     vector<float> dataset(100);
     PlainArrayDataStorage<DenseVector<float>> pads(&dataset[0], 1, 100);
-    RandomProjectionSketches<DenseVector<float>, int32_t,
+    RandomProjectionSketches<DenseVector<float>,
                              PlainArrayDataStorage<DenseVector<float>>>
-        rps(1, pads, 2, seed);
+        rps(pads, 2, rng);
   } catch (SketchesError &e) {
     FAIL();
   } catch (...) {
@@ -97,9 +98,9 @@ TEST(SketchesTest, EmptyDataset) {
   try {
     vector<double> dataset(100);
     PlainArrayDataStorage<DenseVector<double>> pads(&dataset[0], 0, 100);
-    RandomProjectionSketches<DenseVector<double>, int32_t,
+    RandomProjectionSketches<DenseVector<double>,
                              PlainArrayDataStorage<DenseVector<double>>>
-        rps(1, pads, 2, seed);
+        rps(pads, 2, rng);
     FAIL();
   } catch (SketchesError &e) {
   } catch (...) {
@@ -108,9 +109,9 @@ TEST(SketchesTest, EmptyDataset) {
   try {
     vector<double> dataset(100);
     PlainArrayDataStorage<DenseVector<double>> pads(&dataset[0], 1, 100);
-    RandomProjectionSketches<DenseVector<double>, int32_t,
+    RandomProjectionSketches<DenseVector<double>,
                              PlainArrayDataStorage<DenseVector<double>>>
-        rps(1, pads, 2, seed);
+        rps(pads, 2, rng);
   } catch (SketchesError &e) {
     FAIL();
   } catch (...) {
@@ -119,27 +120,18 @@ TEST(SketchesTest, EmptyDataset) {
 }
 
 TEST(SketchesTest, DimensionMismatchTest) {
-  const uint_fast64_t seed = 4057218;
+  mt19937_64 gen(4057218);
   vector<DenseVector<float>> dataset(1, DenseVector<float>(128));
   ArrayDataStorage<DenseVector<float>> ads(dataset);
-  RandomProjectionSketches<DenseVector<float>> rps(1, ads, 2, seed);
+  RandomProjectionSketches<DenseVector<float>> rps(ads, 2, gen);
+  RandomProjectionSketchesQuery<DenseVector<float>> rpsq(rps, 0);
   try {
-    rps.load_query(0, DenseVector<float>(129));
+    rpsq.load_query(DenseVector<float>(129));
     FAIL();
   } catch (SketchesError &e) {
   } catch (...) {
     FAIL();
   }
-}
-
-TEST(SketchesTest, InvalidWorkerIDTest) {
-  const uint_fast64_t seed = 4057218;
-  vector<DenseVector<float>> dataset(1, DenseVector<float>(128));
-  ArrayDataStorage<DenseVector<float>> ads(dataset);
-  RandomProjectionSketches<DenseVector<float>> rps(1, ads, 2, seed);
-  rps.load_query(0, DenseVector<float>(128));
-  ASSERT_THROW(rps.load_query(1, DenseVector<float>(128)), SketchesError);
-  ASSERT_THROW(rps.get_score(1, 0), SketchesError);
 }
 
 TEST(SketchesTest, StatisticalTest) {
@@ -151,7 +143,6 @@ TEST(SketchesTest, StatisticalTest) {
   const float r = sqrt(2.0) / 2.0;
   const float alpha = 1.0 - r * r / 2.0;
   const float beta = sqrt(1.0 - alpha * alpha);
-  const uint_fast64_t seed = 4057218;
   mt19937_64 gen(4057218);
   normal_distribution<float> g(0.0, 1.0);
   vector<DenseVector<float>> dataset;
@@ -164,10 +155,15 @@ TEST(SketchesTest, StatisticalTest) {
     dataset.push_back(p);
   }
   ArrayDataStorage<DenseVector<float>> ads(dataset);
-  RandomProjectionSketches<DenseVector<float>> rps(1, ads, 2, seed);
+  RandomProjectionSketches<DenseVector<float>> rps(ads, 2, gen);
+  RandomProjectionSketchesQuery<DenseVector<float>> rpsq(rps, threshold);
   uniform_int_distribution<int> u(0, n - 1);
   int worst = 0;
   int worst_th = 0;
+  vector<int32_t> all;
+  for (int i = 0; i < n; ++i) {
+    all.push_back(i);
+  }
   vector<int32_t> filtered;
   for (int it = 0; it < num_it; ++it) {
     int nn_id = u(gen);
@@ -178,16 +174,22 @@ TEST(SketchesTest, StatisticalTest) {
     v -= v.dot(dataset[nn_id]) * dataset[nn_id];
     v.normalize();
     DenseVector<float> q(alpha * dataset[nn_id] + beta * v);
-    rps.load_query(0, q);
-    int th = rps.get_score(0, nn_id);
-    ASSERT_TRUE(rps.get_score(0, nn_id) <= threshold);
+    rpsq.load_query(q);
+    int th = rpsq.get_distance_estimate(nn_id);
+    ASSERT_TRUE(rpsq.is_close(nn_id));
     worst_th = max(worst_th, th);
     int cnt = 0;
+    int cnt2 = 0;
     for (int i = 0; i < n; ++i) {
-      if (rps.get_score(0, i) <= th) {
+      if (rpsq.get_distance_estimate(i) <= th) {
         ++cnt;
       }
+      if (rpsq.get_distance_estimate(i) <= threshold) {
+        ++cnt2;
+      }
     }
+    rpsq.filter_close(all, &filtered);
+    ASSERT_EQ(filtered.size(), cnt2);
     worst = max(worst, cnt);
   }
   ASSERT_LE(worst, num_cand);

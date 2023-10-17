@@ -40,20 +40,17 @@
 //
 // class MyClass {
 //  private:
-//   void PrivateMethod();
-//   FRIEND_TEST(MyClassTest, PrivateMethodWorks);
+//   void MyMethod();
+//   FRIEND_TEST(MyClassTest, MyMethod);
 // };
 //
 // class MyClassTest : public testing::Test {
 //   // ...
 // };
 //
-// TEST_F(MyClassTest, PrivateMethodWorks) {
-//   // Can call MyClass::PrivateMethod() here.
+// TEST_F(MyClassTest, MyMethod) {
+//   // Can call MyClass::MyMethod() here.
 // }
-//
-// Note: The test class must be in the same namespace as the class being tested.
-// For example, putting MyClassTest in an anonymous namespace will not work.
 
 #define FRIEND_TEST(test_case_name, test_name)\
 friend class test_case_name##_##test_name##_Test
